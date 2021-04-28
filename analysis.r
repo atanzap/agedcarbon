@@ -2,9 +2,9 @@
 # Datafile S1 - R code for statistical analyses
 # File accompanies:
 #   Aged soils contribute little to contemporary carbon cycling downstream of thawing permafrost peatlands
-#   Andrew J Tanentzap, Katheryn Burd, McKenzie Kuhn, Cristian Estop-Aragonés, Suzanne E. Tank, David Olefeldt
+#   Andrew J Tanentzap, Katheryn Burd, McKenzie Kuhn, Cristian Estop-AragonÃ©s, Suzanne E. Tank, David Olefeldt
 # Please cite if you reuse / find helpful
-# File prepared by AJ Tanentzap (ajt65@cam.ac.uk) in Jan 2021
+# File prepared by AJ Tanentzap (ajt65@cam.ac.uk) in Jan 2021 (updated post-review Apr 2021)
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -27,15 +27,16 @@
 # 7) re-fit mixing model to consumers without 2H
 # 8) fit mixing model to algae
 # 9) compare DIC and DOC between sites
-# Fig 1 – F14C in soils and rivers
+# Fig 1 â€“ F14C in soils and rivers
 # Fig 2 - age-depth profiles of porewater DOC 
 # Fig 3 - Age profiles of outlets from both source approportion models (a/b = Raymond, c = Wild)
-# Fig 4 – a) consumer ages; b) contributions
-# Fig S1 – posterior comparison between consumers and DOC pool
-# Fig S2 – isotope biplots
-# Fig S3 – histogram of algal 13C compared to Ishikawa dataset  https://link.springer.com/article/10.1007/s11284-018-1623-z
-# Fig S4 – compare estimates of resource use with and without H
-  
+# Fig 4 â€“ a) consumer ages; b) contributions
+# Fig S1 â€“ compare estimates of resource use with and without H
+# Fig S2 â€“ compare estimates with and without lipid correction of 13C
+# Fig S3 â€“ posterior comparison between consumers and DOC pool
+# Fig S4 â€“ isotope biplots
+# Fig S5 â€“ histogram of algal 13C compared to Ishikawa dataset  https://link.springer.com/article/10.1007/s11284-018-1623-z
+
                               '
 ############################################################
 ### 0) load data and packages
@@ -505,7 +506,7 @@ STANdata_f <- list(  yCNHR = as.matrix(f14c[f14c$Type %in% c('fish','fish','drag
                      deltaWmn = as.numeric(with(f14c[f14c$Type=='water',],tapply(d2H,Site,mean))), deltaWsd = as.numeric(with(f14c[f14c$Type=='water',],tapply(d2H,Site,sd))), tpossd = 0.1
                  )
 STANdata_f$N <- nrow(STANdata_f$yCNHR)
-STANdata_f$consumer <- f14c[f14c$Type %in% c('fish','fish','dragonfly','hyallela','mayfly'),'Type']
+STANdata_f$consumer <- f14c[f14c$Type %in% c('fish','dragonfly','hyallela','mayfly'),'Type']
 levels(STANdata_f$consumer)[levels(STANdata_f$consumer)=="mayfly"] <- 'dragonfly'
 STANdata_f$tposmu <- levels(STANdata_f$consumer[drop=T])
 STANdata_f$ptlOmegamu <- levels(STANdata_f$consumer[drop=T])
@@ -546,6 +547,13 @@ its = function(){ list( sigma = rep(1,6), tpos = c(2,2.5,1.5), ptlf = c(2,2.5,1.
                         betab = rep(1,4), ran_eff_c = matrix(rep(1,6),3), phiA = rep(0.8,16), phiP = rep(0.5,16), lambdaA = 10, lambdaP = 10 )}
 stanFWmix1_p <- stan(model_code=stanFWmix, data=STANdata_f, init=its, chains=4, iter=8000, warmup=3000, thin=20, refresh=100, cores=4, open_progress=T, control = list(adapt_delta=0.95, max_treedepth=14))
 
+# refit after normalising lipid content 13C in fish
+f14_c_norm13 <- f14c 
+f14_c_norm13[f14_c_norm13$Type %in% c('fish'),'d13C'] <- f14_c_norm13[f14_c_norm13$Type %in% c('fish'),'d13C']-3.32 + 0.99*f14_c_norm13[f14_c_norm13$Type %in% c('fish'),'Per_C']/f14_c_norm13[f14_c_norm13$Type %in% c('fish'),'Per_N']
+STANdata_f_norm13 <- STANdata_f
+STANdata_f_norm13$yCNHR = as.matrix(f14_c_norm13[f14_c_norm13$Type %in% c('fish','dragonfly','hyallela','mayfly'),c('d13C','d15N','d2H','d14C')])
+stanFWmix1_p_norm13 <- stan(model_code=stanFWmix, data=STANdata_f_norm13, init=its, chains=4, iter=8000, warmup=3000, thin=20, refresh=100, cores=4, open_progress=T, control = list(adapt_delta=0.95, max_treedepth=14))
+    
 # refit using solid peat at base of active layer
 burned_res_df <- f14c[-which( f14c$Type %in% c('oldestpeat','modern_veg_litter','peat_permafrost_litter','algae') == F | f14c$Site == 'unburned'),]
 unburned_res_df <- f14c[-which( f14c$Type %in% c('oldpeat','modern_veg_litter','peat_permafrost_litter','algae') == F | f14c$Site == 'burned'),]
@@ -686,7 +694,7 @@ stanFWmix1_noH <- stan(model_code = stanFWmix_noH, data = STANdata_f_noH, init =
 ### 8) fit mixing model to algae
 ############################################################
 # read in fractionation data from Finlay's 2004 L&O paper
-alg_frac <- read.csv("finlay_fig7.csv", header = T)
+alg_frac <- read.csv("./data/finlay_fig7.csv", header = T)
 # fit distribution to the data to see what serves it best
 library(MASS)
 AIC(fitdistr(alg_frac[,1], "lognormal"))
@@ -754,7 +762,7 @@ STANdata_f_A <- list(  yCR = as.matrix(f14c_v2[f14c_v2$Type =='algae',c('d13C','
 STANdata_f_A$N <- nrow(STANdata_f_A$yCR)
 STANdata_f_A$site <- as.numeric(f14c[f14c$Type =='algae','Site'])
 
-# allow for fractionation of soil OM to soil CO2 by averaging 1-4‰ estimate (https://www.sciencedirect.com/science/article/pii/S0009254199000376?via%3Dihub#BIB37   https://www.nature.com/articles/s41598-017-09049-9)
+# allow for fractionation of soil OM to soil CO2 by averaging 1-4â€° estimate (https://www.sciencedirect.com/science/article/pii/S0009254199000376?via%3Dihub#BIB37   https://www.nature.com/articles/s41598-017-09049-9)
 STANdata_f_A$dResourcemu[1,1:2] <- STANdata_f_A$dResourcemu[1,1:2] + 2.5 
 # estimated values from active layer                                           
 STANdata_f_A$dResourcemu[2,2] <- mean(c(-295.3064,-237.4975))
@@ -841,13 +849,23 @@ stanFWmix1A_MOB <- stan(model_code = stanFWmixA, data = STANdata_f_MOB, init = i
 stanFWmix1A_MOB_log_lik <- extract_log_lik(stanFWmix1A_MOB)
 stanFWmix1A_MOB_loo <- loo(stanFWmix1A_MOB_log_lik,cores=6)           
          
+# compare to model where methanotrophy 14C signature is modern
+STANdata_f_MOB_mod <- STANdata_f_MOB   
+STANdata_f_MOB_mod$dResourcemu[1:2,2,1] <- permod3[1,2]
+STANdata_f_MOB_mod$dResourcesd[1:2,2,1] <- sqrt(var((ss2$yin - ss2$y)/(1-ss2$lev)))
+
+stanFWmix1A_MOB_mod <- stan(model_code = stanFWmixA, data = STANdata_f_MOB, init = its, chains=4, iter=8000, warmup=3000, thin=20, refresh=100, cores=4, open_progress = T, control = list(adapt_delta=0.9))
+stanFWmix1A_MOB_mod_log_lik <- extract_log_lik(stanFWmix1A_MOB_mod)
+stanFWmix1A_MOB_mod_loo <- loo(stanFWmix1A_MOB_mod_log_lik,cores=6)           
+
               
 # extract model weights and finalise calculations
 # want to use pseudo-BMA rather than stacking because we expect some models to have similar predictive pformance and we want them to count uniquely, i.e. don't want those to share weights
 # https://cran.r-project.org/web/packages/loo/vignettes/loo2-weights.html 
 mod_wt <- loo_model_weights(list(stanFWmix1A_loo,stanFWmix1A_s2_loo,stanFWmix1A_s3_loo,stanFWmix1A_MOB_loo),method="pseudobma")
 
-
+# test effect of including MOB model with atmospheric 14C signature into model set
+mod_wt_mod <- loo_model_weights(list(stanFWmix1A_loo,stanFWmix1A_s2_loo,stanFWmix1A_s3_loo,stanFWmix1A_MOB_loo,stanFWmix1A_MOB_mod_loo),method="pseudobma")
 
 # are biota older in burned site?
 with(f14c[f14c$Type %in% c('fish','dragonfly','algae','hyallela','mayfly'),], leveneTest(d14C ~ Site))
@@ -871,7 +889,7 @@ wilcox.test(o14c[o14c$Month=='Sep',]$d14C,o14c_DIC$d14C[c(3:4,1:2)],paired=T)
 
 
 ############################################################
-### Fig 1 – F14C in soils and rivers
+### Fig 1 â€“ F14C in soils and rivers
 ############################################################
 with(p14c, plot(tapply(F14C,Site,mean), ylab='Fraction modern C (%)', las=1, xaxt='n', xlab='', bty='n', ylim=c(0.7,1.1), xlim=c(1,9), pch=15, cex=1.2) )
 axis(1,1:3,lab=c('UPP','Bog','BPP'))
@@ -949,7 +967,7 @@ quantile(rstantools::bayes_R2(extract(stanMIX1_a_d, "muy14C")[[1]],STANdata_a$y1
 
 
 ############################################################
-### Fig 4 – a) consumer ages; b) contributions
+### Fig 4 â€“ a) consumer ages; b) contributions
 ############################################################
 out_quants <-  sapply(order(STANdata_f$tposmu), function(x) {
                 c( quantile(extract(stanFWmix1_p, 'p')[[1]][,which(STANdata_f$consumer == x & STANdata_f$site == 2),3], prob = c(0.5,0.025,0.975)),
@@ -967,7 +985,7 @@ f14c2 <- f14c
 levels(f14c2$Type)[levels(f14c2$Type)=="mayfly"] <- 'dragonfly'
 levels(f14c2$Type)[levels(f14c2$Type)=="stickleback"] <- 'greyling'
 with(f14c2[which(f14c2$Type %in% c('algae','hyallela','dragonfly','greyling')),], boxplot(d14C ~ Site + Type[drop=T], las = 1,
-          ylab = expression(Delta * '14C (‰)'),
+          ylab = expression(Delta * '14C (â€°)'),
           lty=1, ylim = c(-40,40)))
 axis(4,  at= (exp(c(0,50,200,400)/-8033) * exp((1950-2017)/8267) - 1)*1000, lab = c(0,50,200,400), las = 1)
 
@@ -990,7 +1008,46 @@ quantile(rstantools::bayes_R2(t(apply(extract(stanFWmix1_p,'muyCNHR')[[1]],1,as.
   
     
 ############################################################
-### Fig S1 – posterior comparison between consumers and DOC pool
+### Fig S1 â€“ compare estimates of resource use with and without H
+############################################################
+cor(as.vector(sapply(1:3, function(x){ colMeans(extract(stanFWmix1_p, 'p')[[1]][,,x]) })), as.vector(sapply(1:3, function(x){ colMeans(extract(stanFWmix1_noH, 'p')[[1]][,,x]) })), method = "spearman")
+
+par(mfrow=c(1,3))
+plot(colMeans(extract(stanFWmix1_p, 'p')[[1]][,,1]), colMeans(extract(stanFWmix1_noH, 'p')[[1]][,,1]), ylab='p_algae (without H)', xlab='p_algae (with H)', las = 1, xlim = c(0.6,1), ylim = c(0.6,1), pch=19); abline(0,1)
+plot(colMeans(extract(stanFWmix1_p, 'p')[[1]][,,2]), colMeans(extract(stanFWmix1_noH, 'p')[[1]][,,2]), ylab='p_litter (without H)', xlab='p_litter (with H)', las = 1, xlim = c(0,.4), ylim = c(0,.4), pch=19); abline(0,1)
+plot(colMeans(extract(stanFWmix1_p, 'p')[[1]][,,3]), colMeans(extract(stanFWmix1_noH, 'p')[[1]][,,3]), ylab='p_soil_DOC (without H)', xlab='p_soil_DOC (with H)', las = 1, xlim = c(0,0.08), ylim = c(0,0.08), pch=19); abline(0,1)
+
+
+############################################################
+### Fig S2 â€“ compare estimates with and without lipid correction
+############################################################
+# process estimates from normalised model
+out_quants_norm13 <-  sapply(order(STANdata_f_norm13$tposmu), function(x) {
+                c( quantile(extract(stanFWmix1_p_norm13, 'p')[[1]][,which(STANdata_f_norm13$consumer == x & STANdata_f_norm13$site == 2),3], prob = c(0.5,0.025,0.975)),
+                   quantile(extract(stanFWmix1_p_norm13, 'p')[[1]][,which(STANdata_f_norm13$consumer == x & STANdata_f_norm13$site == 1),3], prob = c(0.5,0.025,0.975)),
+                   quantile(extract(stanFWmix1_p_norm13, 'p')[[1]][,which(STANdata_f_norm13$consumer == x & STANdata_f_norm13$site == 2),1], prob = c(0.5,0.025,0.975)),
+                   quantile(extract(stanFWmix1_p_norm13, 'p')[[1]][,which(STANdata_f_norm13$consumer == x & STANdata_f_norm13$site == 1),1], prob = c(0.5,0.025,0.975)) )
+                })
+out_quants_norm13[1,] <- sapply(order(STANdata_f_norm13$tposmu), function(x){mean(extract(stanFWmix1_p_norm13, 'p')[[1]][,which(STANdata_f_norm13$consumer == x & STANdata_f_norm13$site == 2),3])})
+out_quants_norm13[4,] <- sapply(order(STANdata_f_norm13$tposmu), function(x){mean(extract(stanFWmix1_p_norm13, 'p')[[1]][,which(STANdata_f_norm13$consumer == x & STANdata_f_norm13$site == 1),3])})
+out_quants_norm13[7,] <- sapply(order(STANdata_f_norm13$tposmu), function(x){mean(extract(stanFWmix1_p_norm13, 'p')[[1]][,which(STANdata_f_norm13$consumer == x & STANdata_f_norm13$site == 2),1])})
+out_quants_norm13[10,] <- sapply(order(STANdata_f_norm13$tposmu), function(x){mean(extract(stanFWmix1_p_norm13, 'p')[[1]][,which(STANdata_f_norm13$consumer == x & STANdata_f_norm13$site == 1),1])})
+       
+
+plot(1:8-0.1, c(as.numeric(out_quants_norm13[seq(1,nrow(out_quants_norm13),by=3),])[9:12],as.numeric(out_quants[seq(1,nrow(out_quants),by=3),])[9:12])*100,
+               xlim = c(0.5,8.5), ylim = c(0,100),
+               bty = 'n', las = 1, xaxt = 'n', #log='y',
+               cex.axis = 1.3, cex.lab = 1.3, cex = 1.2,
+               pch = rep(c(22,21),times=4), bg = rep(rep(c('#808000','#387013'),each=2),times=2),
+               xlab = 'consumer', ylab = '% contribution')
+sapply(seq(1,8,by=2), function(x){lines(rep((1:8-0.1)[x],2),c(c(as.numeric(out_quants_norm13[seq(2,nrow(out_quants_norm13),3),])[9:12],as.numeric(out_quants[seq(2,nrow(out_quants),3),])[9:12])[x],c(as.numeric(out_quants_norm13[seq(3,nrow(out_quants_norm13),3),])[9:12],as.numeric(out_quants[seq(3,nrow(out_quants),3),])[9:12])[x])*100, col=rep(c('#808000',NA,'#387013',NA),times=2)[x]) })
+sapply(seq(2,8,by=2), function(x){lines(rep((1:8-0.1)[x],2),c(c(as.numeric(out_quants_norm13[seq(2,nrow(out_quants_norm13),3),])[9:12],as.numeric(out_quants[seq(2,nrow(out_quants),3),])[9:12])[x],c(as.numeric(out_quants_norm13[seq(3,nrow(out_quants_norm13),3),])[9:12],as.numeric(out_quants[seq(3,nrow(out_quants),3),])[9:12])[x])*100, col=rep(c(NA,'#808000',NA,'#387013'),times=2)[x]) })
+axis(1, at = c(2.5,6.5), lab = c("corrected", "uncorrected"), cex.lab = 1.3)
+abline(v = 4.5, lty = 3)
+
+
+############################################################
+### Fig S3 â€“ posterior comparison between consumers and DOC pool
 ############################################################
 t1 <- extract(stanMIX1_a, 'p_pp')[[1]]
 t1 <- extract(stanMIX1_a_d, 'p_pp')[[1]]
@@ -1003,7 +1060,7 @@ apply(t2, 1, function(x) { lines(kdensity(x,kernel='beta'),col=adjustcolor('red'
 
 
 ############################################################
-### Fig S2 – isotope biplots
+### Fig S4 â€“ isotope biplots
 ############################################################
 par(mfrow=c(3,2), mar = c(4.5,4.5,.5,.5), oma = c(1,1,1,1))
 #plot(STANdata_f$yCNHR[,c(1,4)], pch = 19, xlim = c(-60,0), ylim = c(-1000,100))
@@ -1055,7 +1112,7 @@ sapply(1:2, function(x){ text(6,c(9,7)[x],c('burned','unburned')[x],cex=1.2,adj=
 
 
 ############################################################
-### Fig S3 – histogram of algal 13C compared to Ishikawa dataset  https://link.springer.com/article/10.1007/s11284-018-1623-z
+### Fig S5 â€“ histogram of algal 13C compared to Ishikawa dataset  https://link.springer.com/article/10.1007/s11284-018-1623-z
 ############################################################
 globperi <- read.table('global_SI_periphyton.csv',header=T,sep=',')
 hist(globperi[, ]$d13C_permil,main='',las=1,xlab=expression(Delta13C*' (%)'),xlim=c(-50,0))  #which(globperi$dominant_taxa %in% c('macrophytes','bryophyte') == F) makes no difference
@@ -1065,14 +1122,3 @@ hist(f14c[f14c$Type=='algae','d13C'],xlim=c(-50,0),col='black', ylim = c(0,30),a
 leveneTest(c(f14c[f14c$Type=='algae','d13C'],globperi$d13C_permil[!is.na(globperi$d13C_permil)]),
            c(rep(1,sum(f14c$Type=='algae')),rep(2,sum(globperi$d13C_permil != 0,na.rm=T))))
 t.test(f14c[f14c$Type=='algae','d13C'],globperi$d13C_permil[!is.na(globperi$d13C_permil)],var.equal=T)
-
-
-############################################################
-### Fig S4 – compare estimates of resource use with and without H
-############################################################
-cor(as.vector(sapply(1:3, function(x){ colMeans(extract(stanFWmix1_p, 'p')[[1]][,,x]) })), as.vector(sapply(1:3, function(x){ colMeans(extract(stanFWmix1_noH, 'p')[[1]][,,x]) })), method = "spearman")
-
-par(mfrow=c(1,3))
-plot(colMeans(extract(stanFWmix1_p, 'p')[[1]][,,1]), colMeans(extract(stanFWmix1_noH, 'p')[[1]][,,1]), ylab='p_algae (without H)', xlab='p_algae (with H)', las = 1, xlim = c(0.6,1), ylim = c(0.6,1), pch=19); abline(0,1)
-plot(colMeans(extract(stanFWmix1_p, 'p')[[1]][,,2]), colMeans(extract(stanFWmix1_noH, 'p')[[1]][,,2]), ylab='p_litter (without H)', xlab='p_litter (with H)', las = 1, xlim = c(0,.4), ylim = c(0,.4), pch=19); abline(0,1)
-plot(colMeans(extract(stanFWmix1_p, 'p')[[1]][,,3]), colMeans(extract(stanFWmix1_noH, 'p')[[1]][,,3]), ylab='p_soil_DOC (without H)', xlab='p_soil_DOC (with H)', las = 1, xlim = c(0,0.08), ylim = c(0,0.08), pch=19); abline(0,1)
